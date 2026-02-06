@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdgeMemory — Command Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+    <style>
+        /* ============================================================
+           DESIGN TOKENS
+           ============================================================ */
+        :root {
+            /* Surfaces */
+            --bg-deep:       #06070d;
+            --bg-primary:    #0c0e18;
+            --bg-secondary:  rgba(16, 19, 32, 0.7);
+            --bg-card:       rgba(22, 26, 44, 0.55);
+            --bg-card-solid: #161a2c;
+            --bg-hover:      rgba(40, 44, 70, 0.5);
+            --bg-input:      rgba(10, 12, 22, 0.6);
+
+            /* Glass */
+            --glass-bg:      rgba(18, 22, 40, 0.45);
+            --glass-border:  rgba(100, 110, 200, 0.12);
+            --glass-blur:    16px;
+            --glass-shine:   linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 60%);
+
+            /* Clay */
+            --clay-shadow:   6px 6px 16px rgba(0,0,0,0.45), -4px -4px 12px rgba(60,65,110,0.08), inset 1px 1px 2px rgba(255,255,255,0.04);
+            --clay-shadow-sm: 3px 3px 8px rgba(0,0,0,0.35), -2px -2px 6px rgba(60,65,110,0.06), inset 1px 1px 1px rgba(255,255,255,0.03);
+            --clay-shadow-hover: 8px 8px 24px rgba(0,0,0,0.5), -6px -6px 16px rgba(80,85,140,0.1), inset 1px 1px 3px rgba(255,255,255,0.06);
+
+            /* Borders */
+            --border:        rgba(60, 66, 110, 0.25);
+            --border-light:  rgba(100, 110, 200, 0.15);
+
+            /* Text */
+            --text-primary:  #e8eaf4;
+            --text-secondary:#9094b8;
+            --text-muted:    #585e82;
+            --text-bright:   #ffffff;
+
+            /* Accent palette */
+            --accent:        #7c6cf0;
+            --accent-light:  #a193f7;
+            --accent-glow:   rgba(124, 108, 240, 0.35);
+            --accent-gradient: linear-gradient(135deg, #7c6cf0 0%, #5b8ef5 50%, #42d9c8 100%);
+
+            /* Semantic */
+            --success:       #34d399;
+            --success-bg:    rgba(52, 211, 153, 0.1);
+            --warning:       #fbbf24;
+            --warning-bg:    rgba(251, 191, 36, 0.1);
+            --danger:        #f87171;
+            --danger-bg:     rgba(248, 113, 113, 0.1);
+            --info:          #60a5fa;
+            --info-bg:       rgba(96, 165, 250, 0.1);
+
+            /* Sizing */
+            --radius:        16px;
+            --radius-sm:     10px;
+            --radius-lg:     24px;
+            --sidebar-w:     272px;
+            --topbar-h:      64px;
+        }
+
+        /* ============================================================
+           RESET & BASE
+           ============================================================ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { font-size: 16px; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Animated mesh-gradient background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background:
+                radial-gradient(ellipse 80% 50% at 20% 80%, rgba(124,108,240,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 20%, rgba(91,142,245,0.10) 0%, transparent 50%),
+                radial-gradient(ellipse 50% 60% at 50% 50%, rgba(66,217,200,0.06) 0%, transparent 50%);
+            animation: meshShift 20s ease-in-out infinite alternate;
+        }
+        @keyframes meshShift {
+            0%   { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(25deg); }
+        }
+
+        /* Floating orb decorations */
+        body::after {
+            content: '';
+            position: fixed;
+            width: 420px; height: 420px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(124,108,240,0.08), transparent 70%);
+            top: -80px; right: -120px;
+            z-index: -1;
+            animation: orbFloat 14s ease-in-out infinite alternate;
+        }
+        @keyframes orbFloat {
+            0%   { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(-30px, 40px) scale(1.15); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(124,108,240,0.25);
+            border-radius: 20px;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(124,108,240,0.45); }
+
+        /* ============================================================
+           SIDEBAR — Glassmorphism
+           ============================================================ */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 10;
+        }
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--glass-shine);
+            pointer-events: none;
+            border-radius: 0;
+        }
+
+        .sidebar-brand {
+            padding: 28px 24px 22px;
+            border-bottom: 1px solid var(--glass-border);
+            position: relative;
+        }
+        .sidebar-brand h1 {
+            font-size: 22px;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar-brand h1 i {
+            -webkit-text-fill-color: initial;
+            color: var(--accent);
+            filter: drop-shadow(0 0 8px var(--accent-glow));
+        }
+        .sidebar-brand p {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 2.5px;
+            font-weight: 600;
+        }
+
+        .nav-items { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 13px 18px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 13.5px;
+            font-weight: 500;
+            position: relative;
+            margin-bottom: 2px;
+        }
+        .nav-item::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 50%;
+            transform: translateY(-50%) scaleY(0);
+            width: 3px;
+            height: 60%;
+            border-radius: 0 4px 4px 0;
+            background: var(--accent-gradient);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .nav-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            transform: translateX(2px);
+        }
+        .nav-item.active {
+            background: rgba(124,108,240,0.12);
+            color: var(--text-bright);
+            box-shadow: 0 0 24px rgba(124,108,240,0.08);
+        }
+        .nav-item.active::before {
+            transform: translateY(-50%) scaleY(1);
+        }
+        .nav-item.active i {
+            color: var(--accent-light);
+            filter: drop-shadow(0 0 6px var(--accent-glow));
+        }
+        .nav-item i { width: 20px; text-align: center; font-size: 15px; transition: all 0.25s; }
+
+        .sidebar-status {
+            padding: 18px 24px;
+            border-top: 1px solid var(--glass-border);
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            transition: all 0.3s;
+        }
+        .status-dot.online {
+            background: var(--success);
+            box-shadow: 0 0 10px rgba(52,211,153,0.5);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+        .status-dot.offline { background: var(--danger); box-shadow: 0 0 8px rgba(248,113,113,0.4); }
+        @keyframes pulse-dot {
+            0%, 100% { box-shadow: 0 0 6px rgba(52,211,153,0.4); }
+            50%      { box-shadow: 0 0 14px rgba(52,211,153,0.7); }
+        }
+
+        /* ============================================================
+           MAIN AREA
+           ============================================================ */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Topbar — glass */
+        .topbar {
+            height: var(--topbar-h);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            position: relative;
+        }
+        .topbar::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+        }
+        .topbar h2 {
+            font-size: 17px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 28px;
+            scroll-behavior: smooth;
+        }
+
+        /* ============================================================
+           PAGES
+           ============================================================ */
+        .page { display: none; animation: fadeUp 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .page.active { display: block; }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============================================================
+           CARDS — Glass + Clay hybrid
+           ============================================================ */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px) saturate(1.2);
+            -webkit-backdrop-filter: blur(12px) saturate(1.2);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--clay-shadow);
+            position: relative;
+            overflow: hidden;
+            transition: box-shadow 0.3s, transform 0.3s;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--glass-shine);
+            pointer-events: none;
+        }
+        .card:hover {
+            box-shadow: var(--clay-shadow-hover);
+            transform: translateY(-1px);
+        }
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+        .card-title i {
+            color: var(--accent-light);
+            font-size: 15px;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        /* ============================================================
+           STAT CARDS — Claymorphism
+           ============================================================ */
+        .stat-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 22px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--clay-shadow-sm);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--glass-shine);
+            pointer-events: none;
+        }
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: -50%; right: -30%;
+            width: 100px; height: 100px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(124,108,240,0.06), transparent 70%);
+            pointer-events: none;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: var(--clay-shadow-hover);
+            border-color: rgba(124,108,240,0.2);
+        }
+        .stat-card .label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        .stat-card .value {
+            font-size: 30px;
+            font-weight: 800;
+            margin-top: 8px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-card .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* ============================================================
+           BUTTONS — Clay style
+           ============================================================ */
+        .btn {
+            padding: 11px 22px;
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+            letter-spacing: 0.2px;
+        }
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .btn-primary {
+            background: var(--accent-gradient);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(124,108,240,0.3), inset 0 1px 1px rgba(255,255,255,0.15);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(124,108,240,0.45), inset 0 1px 1px rgba(255,255,255,0.2);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(124,108,240,0.25), inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .btn-secondary {
+            background: var(--glass-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            box-shadow: var(--clay-shadow-sm);
+        }
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+            transform: translateY(-1px);
+            box-shadow: var(--clay-shadow);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(239,68,68,0.3), inset 0 1px 1px rgba(255,255,255,0.1);
+        }
+        .btn-sm { padding: 8px 16px; font-size: 12.5px; border-radius: 8px; }
+
+        /* ============================================================
+           FORMS — Glassmorphism
+           ============================================================ */
+        textarea, input[type="text"], select {
+            width: 100%;
+            background: var(--bg-input);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 13px 16px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            resize: vertical;
+            outline: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: inset 2px 2px 6px rgba(0,0,0,0.15);
+        }
+        textarea:focus, input[type="text"]:focus, select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow), inset 2px 2px 6px rgba(0,0,0,0.1);
+        }
+        textarea::placeholder, input::placeholder {
+            color: var(--text-muted);
+        }
+        select {
+            appearance: none;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239094b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+        input[type="file"] {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        input[type="file"]::file-selector-button {
+            background: var(--glass-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 16px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: all 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+        }
+
+        /* ============================================================
+           MEMORY LIST
+           ============================================================ */
+        .memory-item {
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 14px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--clay-shadow-sm);
+            position: relative;
+            overflow: hidden;
+        }
+        .memory-item::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: var(--accent-gradient);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .memory-item:hover {
+            border-color: rgba(124,108,240,0.25);
+            transform: translateX(4px);
+            box-shadow: var(--clay-shadow);
+        }
+        .memory-item:hover::before { opacity: 1; }
+        .memory-item .mem-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .memory-item .mem-type {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+        .mem-type.episodic  { background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.2); }
+        .mem-type.semantic  { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.2); }
+        .mem-type.procedural{ background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
+        .mem-type.emotional { background: rgba(244,114,182,0.12); color: #f472b6; border: 1px solid rgba(244,114,182,0.2); }
+        .memory-item .mem-content {
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+        }
+        .memory-item .mem-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .memory-item .mem-meta i { margin-right: 4px; }
+
+        /* ============================================================
+           CHAT
+           ============================================================ */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 150px);
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 8px 8px 0;
+        }
+        .chat-bubble {
+            max-width: 78%;
+            padding: 16px 20px;
+            border-radius: 20px;
+            margin-bottom: 14px;
+            font-size: 14px;
+            line-height: 1.7;
+            position: relative;
+            animation: bubbleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes bubbleIn {
+            from { opacity: 0; transform: scale(0.95) translateY(8px); }
+            to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .chat-bubble.user {
+            background: var(--accent-gradient);
+            color: #fff;
+            margin-left: auto;
+            border-bottom-right-radius: 6px;
+            box-shadow: 0 4px 20px rgba(124,108,240,0.25);
+        }
+        .chat-bubble.bot {
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-bottom-left-radius: 6px;
+            box-shadow: var(--clay-shadow-sm);
+        }
+        .chat-bubble .meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .chat-input-area {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            padding: 4px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            box-shadow: var(--clay-shadow-sm);
+        }
+        .chat-input-area input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            padding: 12px 16px;
+        }
+        .chat-input-area input:focus {
+            box-shadow: none;
+            border: none;
+        }
+        .chat-input-area .btn {
+            border-radius: 12px;
+            min-width: 48px;
+            justify-content: center;
+        }
+
+        /* ============================================================
+           GRAPH
+           ============================================================ */
+        #graph-container {
+            width: 100%;
+            height: calc(100vh - 210px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            background: var(--bg-card);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: var(--clay-shadow);
+        }
+
+        /* ============================================================
+           TOAST — Glass style
+           ============================================================ */
+        .toast-container {
+            position: fixed;
+            top: 20px; right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px) saturate(1.5);
+            -webkit-backdrop-filter: blur(20px) saturate(1.5);
+            border: 1px solid var(--glass-border);
+            border-left: 4px solid var(--accent);
+            padding: 16px 22px;
+            border-radius: var(--radius-sm);
+            min-width: 300px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            animation: toastSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 13.5px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .toast.success { border-left-color: var(--success); }
+        .toast.error   { border-left-color: var(--danger); }
+        .toast.info    { border-left-color: var(--info); }
+        @keyframes toastSlide {
+            from { transform: translateX(120%); opacity: 0; }
+            to   { transform: translateX(0); opacity: 1; }
+        }
+
+        /* ============================================================
+           LOADER
+           ============================================================ */
+        .loader {
+            display: inline-block;
+            width: 18px; height: 18px;
+            border: 2px solid var(--border);
+            border-top: 2px solid var(--accent-light);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ============================================================
+           SYSTEM VERIFY — Check items
+           ============================================================ */
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 18px;
+            background: var(--bg-card);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+            box-shadow: var(--clay-shadow-sm);
+            transition: all 0.3s;
+            animation: fadeUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .check-item:hover { transform: translateX(3px); }
+        .check-item .check-icon {
+            width: 32px; height: 32px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .check-icon.pass {
+            background: var(--success-bg);
+            color: var(--success);
+            box-shadow: 0 0 12px rgba(52,211,153,0.15);
+        }
+        .check-icon.fail {
+            background: var(--danger-bg);
+            color: var(--danger);
+            box-shadow: 0 0 12px rgba(248,113,113,0.15);
+        }
+        .check-icon.pending {
+            background: rgba(88,94,130,0.15);
+            color: var(--text-muted);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .badge-success { background: var(--success-bg); color: var(--success); }
+        .badge-error   { background: var(--danger-bg); color: var(--danger); }
+
+        /* ============================================================
+           SECTION TITLE (used in browser page)
+           ============================================================ */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .section-header h3 {
+            font-size: 18px;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ============================================================
+           DASHBOARD GRID
+           ============================================================ */
+        .dash-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* ============================================================
+           LLM PROVIDER CARDS
+           ============================================================ */
+        .provider-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .provider-btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* ============================================================
+           UTILITY
+           ============================================================ */
+        .flex-row { display: flex; align-items: center; }
+        .gap-8 { gap: 8px; }
+        .gap-10 { gap: 10px; }
+        .gap-12 { gap: 12px; }
+        .mt-12 { margin-top: 12px; }
+        .mt-16 { margin-top: 16px; }
+        .mb-12 { margin-bottom: 12px; }
+        .mb-16 { margin-bottom: 16px; }
+        .flex-1 { flex: 1; }
+
+        /* ============================================================
+           ANIMATED GRADIENT BORDER (for active nav / special cards)
+           ============================================================ */
+        .glow-border {
+            position: relative;
+        }
+        .glow-border::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            background: var(--accent-gradient);
+            opacity: 0.15;
+            z-index: -1;
+            filter: blur(8px);
+        }
+
+        /* ============================================================
+           RESPONSIVE (smaller sidebar on narrow screens)
+           ============================================================ */
+        @media (max-width: 900px) {
+            .sidebar { width: 72px; }
+            .sidebar .nav-item span,
+            .sidebar-brand p,
+            .sidebar-brand h1 span { display: none; }
+            .sidebar-brand h1 { justify-content: center; }
+            .sidebar-status span:not(.status-dot) { display: none; }
+            .nav-item { justify-content: center; padding: 14px; }
+            .nav-item i { margin: 0; }
+            .dash-grid, .provider-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============================================================
+     SIDEBAR
+     ============================================================ -->
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <h1><i class="fas fa-brain"></i> <span>EdgeMemory</span></h1>
+        <p>Command Center</p>
+    </div>
+    <nav class="nav-items">
+        <div class="nav-item active" data-page="dashboard">
+            <i class="fas fa-chart-line"></i> <span>Dashboard</span>
+        </div>
+        <div class="nav-item" data-page="ingest">
+            <i class="fas fa-plus-circle"></i> <span>Ingest Memory</span>
+        </div>
+        <div class="nav-item" data-page="browser">
+            <i class="fas fa-database"></i> <span>Memory Browser</span>
+        </div>
+        <div class="nav-item" data-page="chat">
+            <i class="fas fa-comments"></i> <span>Query Chat</span>
+        </div>
+        <div class="nav-item" data-page="graph">
+            <i class="fas fa-project-diagram"></i> <span>Knowledge Graph</span>
+        </div>
+        <div class="nav-item" data-page="llm">
+            <i class="fas fa-robot"></i> <span>LLM Providers</span>
+        </div>
+        <div class="nav-item" data-page="verify">
+            <i class="fas fa-check-double"></i> <span>System Verify</span>
+        </div>
+    </nav>
+    <div class="sidebar-status">
+        <span class="status-dot" id="ws-status"></span>
+        <span id="ws-label">Connecting...</span>
+    </div>
+</aside>
+
+<!-- ============================================================
+     MAIN
+     ============================================================ -->
+<div class="main">
+    <header class="topbar">
+        <h2 id="page-title">Dashboard</h2>
+        <div class="topbar-actions">
+            <button class="btn btn-secondary btn-sm" onclick="saveSystem()">
+                <i class="fas fa-save"></i> Save
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="refreshStats()">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="content">
+
+        <!-- ===== DASHBOARD ===== -->
+        <div class="page active" id="page-dashboard">
+            <div class="card-grid" id="stat-cards"></div>
+            <div class="dash-grid">
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-history"></i> Recent Memories</div>
+                    <div id="recent-memories"></div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-chart-pie"></i> Memory Types</div>
+                    <canvas id="type-chart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== INGEST ===== -->
+        <div class="page" id="page-ingest">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-keyboard"></i> Text Memory</div>
+                <textarea id="ingest-text" rows="6" placeholder="Enter a memory, thought, event, or observation..."></textarea>
+                <div class="flex-row gap-10 mt-12">
+                    <select id="ingest-source" style="width:170px;">
+                        <option value="manual">Manual</option>
+                        <option value="conversation">Conversation</option>
+                        <option value="journal">Journal</option>
+                        <option value="note">Note</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="ingestText()">
+                        <i class="fas fa-paper-plane"></i> Ingest
+                    </button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fas fa-microphone"></i> Voice Memory (Audio Upload)</div>
+                <input type="file" id="audio-file" accept="audio/*" class="mb-12">
+                <button class="btn btn-primary" onclick="ingestAudio()">
+                    <i class="fas fa-upload"></i> Upload &amp; Transcribe
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fas fa-list"></i> Ingestion Log</div>
+                <div id="ingest-log" style="max-height:300px;overflow-y:auto;font-size:13px;color:var(--text-secondary);"></div>
+            </div>
+        </div>
+
+        <!-- ===== MEMORY BROWSER ===== -->
+        <div class="page" id="page-browser">
+            <div class="section-header">
+                <h3>All Memories</h3>
+                <button class="btn btn-secondary btn-sm" onclick="loadMemories()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            <div class="card mb-16" style="padding:16px 20px;">
+                <div class="flex-row gap-10" style="flex-wrap:wrap;">
+                    <input type="text" id="mem-search" placeholder="Search memories..."
+                           style="flex:1;min-width:200px;"
+                           onkeydown="if(event.key==='Enter')searchMemories()">
+                    <select id="mem-type-filter" style="width:150px;">
+                        <option value="">All Types</option>
+                        <option value="episodic">Episodic</option>
+                        <option value="semantic">Semantic</option>
+                        <option value="procedural">Procedural</option>
+                        <option value="reflective">Reflective</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm" onclick="searchMemories()">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </div>
+            </div>
+            <div id="memory-list"></div>
+        </div>
+
+        <!-- ===== QUERY CHAT ===== -->
+        <div class="page" id="page-chat">
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input"
+                           placeholder="Ask about your memories... (e.g., 'Why did I change my mind about X?')"
+                           onkeydown="if(event.key==='Enter')sendQuery()">
+                    <button class="btn btn-primary" onclick="sendQuery()">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== KNOWLEDGE GRAPH ===== -->
+        <div class="page" id="page-graph">
+            <div class="flex-row gap-10 mb-16">
+                <button class="btn btn-secondary btn-sm" onclick="loadGraph()">
+                    <i class="fas fa-sync-alt"></i> Reload
+                </button>
+                <span style="font-size:13px;color:var(--text-muted);padding-top:2px;" id="graph-info"></span>
+            </div>
+            <div id="graph-container"></div>
+        </div>
+
+        <!-- ===== SYSTEM VERIFY ===== -->
+        <div class="page" id="page-verify">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-stethoscope"></i> Integration Health Checks</div>
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;">
+                    Tests each subsystem end-to-end to verify correct operation.
+                </p>
+                <button class="btn btn-primary" onclick="runChecks()" id="run-checks-btn">
+                    <i class="fas fa-play"></i> Run All Checks
+                </button>
+                <div id="check-results" class="mt-16"></div>
+            </div>
+        </div>
+
+        <!-- ===== LLM PROVIDERS ===== -->
+        <div class="page" id="page-llm">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-exchange-alt"></i> Active Provider</div>
+                <div id="llm-active-info" class="mb-16"></div>
+                <div class="provider-btn-group">
+                    <button class="btn btn-primary" onclick="switchLLM('ollama')" id="btn-ollama">
+                        <i class="fas fa-server"></i> Use Ollama (phi3)
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchLLM('lmstudio')" id="btn-lmstudio">
+                        <i class="fas fa-desktop"></i> Use LM Studio (mistral)
+                    </button>
+                </div>
+            </div>
+            <div class="provider-grid">
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-server"></i> Ollama</div>
+                    <div id="ollama-status"></div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-desktop"></i> LM Studio</div>
+                    <div id="lmstudio-status"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fas fa-vial"></i> Quick Test</div>
+                <div class="flex-row gap-10" style="align-items:stretch;">
+                    <div class="flex-1">
+                        <input type="text" id="llm-test-prompt"
+                               placeholder="Enter a test prompt..."
+                               value="What is the capital of France?">
+                    </div>
+                    <button class="btn btn-primary" onclick="testLLM()">
+                        <i class="fas fa-bolt"></i> Test
+                    </button>
+                </div>
+                <div id="llm-test-result" class="mt-12" style="font-size:13px;color:var(--text-secondary);"></div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<!-- ============================================================
+     JAVASCRIPT (fully preserved functionality)
+     ============================================================ -->
+<script>
+// ===========================================================================
+// State
+// ===========================================================================
+const API = '';
+let ws = null;
+let typeChart = null;
+
+// ===========================================================================
+// Navigation — with smooth page transitions
+// ===========================================================================
+document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        const pageId = 'page-' + el.dataset.page;
+        const page = document.getElementById(pageId);
+        page.classList.add('active');
+        // re-trigger entrance animation
+        page.style.animation = 'none';
+        page.offsetHeight; // reflow
+        page.style.animation = '';
+
+        document.getElementById('page-title').textContent =
+            el.querySelector('span')?.textContent?.trim() || el.textContent.trim();
+
+        // Lazy load data for pages
+        if (el.dataset.page === 'browser')   loadMemories();
+        if (el.dataset.page === 'graph')     loadGraph();
+        if (el.dataset.page === 'dashboard') refreshStats();
+        if (el.dataset.page === 'llm')       loadLLMStatus();
+    });
+});
+
+// ===========================================================================
+// WebSocket
+// ===========================================================================
+function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => {
+        document.getElementById('ws-status').className = 'status-dot online';
+        document.getElementById('ws-label').textContent = 'Connected';
+    };
+    ws.onclose = () => {
+        document.getElementById('ws-status').className = 'status-dot offline';
+        document.getElementById('ws-label').textContent = 'Disconnected';
+        setTimeout(connectWS, 3000);
+    };
+    ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'memory_ingested') {
+            toast('Memory ingested: ' + (msg.data.type || 'unknown'), 'success');
+        }
+    };
+}
+
+// ===========================================================================
+// API helpers
+// ===========================================================================
+async function api(path, opts = {}) {
+    const res = await fetch(API + path, {
+        headers: { 'Content-Type': 'application/json', ...opts.headers },
+        ...opts,
+    });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+    }
+    return res.json();
+}
+
+function toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(() => {
+        el.style.transition = 'all 0.3s';
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(40px)';
+        setTimeout(() => el.remove(), 300);
+    }, 3700);
+}
+
+// ===========================================================================
+// Dashboard
+// ===========================================================================
+async function refreshStats() {
+    try {
+        const stats = await api('/api/system/stats');
+        const cards = document.getElementById('stat-cards');
+        const totalMem = stats.memories?.total_memories ?? 0;
+
+        const statItems = [
+            { label: 'Total Memories', value: totalMem, icon: 'fa-brain' },
+            { label: 'Vector Index',   value: stats.vector_count ?? 0, icon: 'fa-cubes' },
+            { label: 'Graph Nodes',    value: stats.graph_nodes ?? 0, icon: 'fa-circle-nodes' },
+            { label: 'Graph Edges',    value: stats.graph_edges ?? 0, icon: 'fa-link' },
+        ];
+
+        cards.innerHTML = statItems.map(s => `
+            <div class="stat-card">
+                <div class="label"><i class="fas ${s.icon}" style="margin-right:6px;color:var(--accent-light);"></i> ${s.label}</div>
+                <div class="value">${s.value}</div>
+            </div>
+        `).join('') + `
+            <div class="stat-card" style="border-left:3px solid ${stats.llm_provider === 'ollama' ? 'var(--success)' : 'var(--accent)'}">
+                <div class="label"><i class="fas fa-microchip" style="margin-right:6px;color:var(--accent-light);"></i> LLM Provider</div>
+                <div class="value" style="font-size:16px;margin-top:10px;">${stats.llm_provider ?? '-'}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${stats.llm_model ?? ''}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label"><i class="fas fa-vector-square" style="margin-right:6px;color:var(--accent-light);"></i> Embeddings</div>
+                <div class="value" style="font-size:14px;margin-top:10px;">${stats.embedding_model ?? '-'}</div>
+            </div>
+        `;
+
+        // Recent memories
+        try {
+            const mems = await api('/api/memories?limit=5');
+            const container = document.getElementById('recent-memories');
+            if (mems.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No memories yet. Go to Ingest to add some.</p>';
+            } else {
+                container.innerHTML = mems.map(m => `
+                    <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;display:flex;align-items:center;gap:10px;">
+                        <span class="mem-type ${m.type || 'episodic'}">${m.type || '?'}</span>
+                        <span style="color:var(--text-secondary);">${(m.content || '').substring(0, 80)}...</span>
+                    </div>
+                `).join('');
+            }
+        } catch(e) {}
+
+        // Type chart
+        const typeCounts = stats.memories?.by_type || {};
+        updateTypeChart(typeCounts);
+    } catch (e) {
+        toast('Failed to load stats: ' + e.message, 'error');
+    }
+}
+
+function updateTypeChart(data) {
+    const labels = Object.keys(data);
+    const values = Object.values(data);
+    const colors = [
+        'rgba(124,108,240,0.8)',
+        'rgba(52,211,153,0.8)',
+        'rgba(251,191,36,0.8)',
+        'rgba(248,113,113,0.8)',
+        'rgba(96,165,250,0.8)',
+        'rgba(236,72,153,0.8)'
+    ];
+
+    const ctx = document.getElementById('type-chart');
+    if (typeChart) typeChart.destroy();
+    if (labels.length === 0) return;
+
+    typeChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors.slice(0, labels.length),
+                borderWidth: 0,
+                hoverBorderWidth: 2,
+                hoverBorderColor: '#fff',
+                spacing: 3,
+                borderRadius: 4,
+            }],
+        },
+        options: {
+            responsive: true,
+            cutout: '65%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#9094b8',
+                        font: { size: 12, family: 'Inter' },
+                        padding: 16,
+                        usePointStyle: true,
+                        pointStyleWidth: 10,
+                    },
+                },
+            },
+        },
+    });
+}
+
+// ===========================================================================
+// Ingestion
+// ===========================================================================
+async function ingestText() {
+    const text = document.getElementById('ingest-text').value.trim();
+    if (!text) return toast('Enter some text first', 'error');
+    const source = document.getElementById('ingest-source').value;
+
+    try {
+        const result = await api('/api/memories/ingest/text', {
+            method: 'POST',
+            body: JSON.stringify({ text, source }),
+        });
+        document.getElementById('ingest-text').value = '';
+        appendIngestLog(result);
+        toast('Memory ingested successfully!', 'success');
+    } catch (e) {
+        toast('Ingestion failed: ' + e.message, 'error');
+    }
+}
+
+async function ingestAudio() {
+    const fileInput = document.getElementById('audio-file');
+    if (!fileInput.files.length) return toast('Select an audio file first', 'error');
+
+    const form = new FormData();
+    form.append('file', fileInput.files[0]);
+
+    try {
+        const res = await fetch(API + '/api/memories/ingest/audio', { method: 'POST', body: form });
+        if (!res.ok) throw new Error(await res.text());
+        const result = await res.json();
+        appendIngestLog(result);
+        toast('Audio transcribed & ingested!', 'success');
+    } catch (e) {
+        toast('Audio ingestion failed: ' + e.message, 'error');
+    }
+}
+
+function appendIngestLog(result) {
+    const log = document.getElementById('ingest-log');
+    const ts = new Date().toLocaleTimeString();
+    log.innerHTML = `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+        <span style="color:var(--success);font-weight:600;">[${ts}]</span>
+        <span class="mem-type ${result.type || ''}">${result.type || '?'}</span>
+        <span>${result.content?.substring(0, 100) || result.event_id}</span>
+        <span style="color:var(--text-muted);margin-left:auto;"> imp: ${(result.importance || 0).toFixed(2)}</span>
+    </div>` + log.innerHTML;
+}
+
+// ===========================================================================
+// Memory Browser
+// ===========================================================================
+async function loadMemories() {
+    try {
+        const mems = await api('/api/memories?limit=100');
+        renderMemoryList(mems);
+    } catch (e) {
+        toast('Failed to load memories: ' + e.message, 'error');
+    }
+}
+
+async function searchMemories() {
+    const q = document.getElementById('mem-search').value.trim();
+    const typeFilter = document.getElementById('mem-type-filter').value;
+    try {
+        let url = '/api/memories/search?limit=100';
+        if (q) url += '&q=' + encodeURIComponent(q);
+        if (typeFilter) url += '&type=' + encodeURIComponent(typeFilter);
+        const mems = await api(url);
+        renderMemoryList(mems);
+    } catch (e) {
+        toast('Search failed: ' + e.message, 'error');
+    }
+}
+
+function renderMemoryList(mems) {
+    const container = document.getElementById('memory-list');
+    if (!mems || mems.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-muted);">No memories found.</p>';
+        return;
+    }
+    container.innerHTML = mems.map(m => `
+        <div class="memory-item" id="mem-${m.event_id}">
+            <div class="mem-header">
+                <span class="mem-type ${m.type || 'episodic'}">${m.type || 'unknown'}</span>
+                <span style="font-size:12px;color:var(--text-muted);font-family:monospace;">${m.event_id?.substring(0, 8) || ''}</span>
+                <button class="btn btn-sm" onclick="deleteMemory('${m.event_id}')"
+                        style="margin-left:auto;padding:4px 10px;font-size:11px;color:var(--danger);border:1px solid var(--danger);background:transparent;cursor:pointer;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div class="mem-content">${escapeHtml(m.content || '')}</div>
+            <div class="mem-meta">
+                <span><i class="fas fa-clock"></i> ${m.timestamp || '-'}</span>
+                <span><i class="fas fa-star"></i> ${(m.importance || 0).toFixed(2)}</span>
+                ${m.topic ? '<span><i class="fas fa-tag"></i> ' + m.topic + '</span>' : ''}
+                ${m.emotion ? '<span><i class="fas fa-heart"></i> ' + m.emotion + '</span>' : ''}
+                ${(m.entities || []).length ? '<span><i class="fas fa-users"></i> ' + m.entities.join(', ') + '</span>' : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+async function deleteMemory(eventId) {
+    if (!confirm('Delete this memory permanently?')) return;
+    try {
+        await api('/api/memories/' + eventId, { method: 'DELETE' });
+        const el = document.getElementById('mem-' + eventId);
+        if (el) {
+            el.style.transition = 'all 0.3s';
+            el.style.opacity = '0';
+            el.style.transform = 'translateX(-20px)';
+            setTimeout(() => el.remove(), 300);
+        }
+        toast('Memory deleted', 'success');
+    } catch (e) {
+        toast('Delete failed: ' + e.message, 'error');
+    }
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// ===========================================================================
+// Query Chat
+// ===========================================================================
+async function sendQuery() {
+    const input = document.getElementById('chat-input');
+    const query = input.value.trim();
+    if (!query) return;
+
+    addChatBubble(query, 'user');
+    input.value = '';
+    const loadingId = addChatBubble('<div class="loader"></div> Thinking...', 'bot');
+
+    try {
+        const result = await api('/api/query', {
+            method: 'POST',
+            body: JSON.stringify({ query }),
+        });
+
+        const evidenceHtml = (result.evidence || []).length
+            ? '<div style="margin-top:10px;font-size:12px;color:var(--text-muted);"><b>Evidence:</b><ul style="margin-top:6px;padding-left:18px;">' +
+              result.evidence.map(e => `<li style="margin-bottom:4px;">${escapeHtml(e.content?.substring(0, 80) || e.event_id)}</li>`).join('') +
+              '</ul></div>'
+            : '';
+
+        document.getElementById(loadingId).innerHTML = `
+            ${escapeHtml(result.answer || 'No answer generated.')}
+            ${evidenceHtml}
+            <div class="meta">Agent: ${result.agent_used || '-'} | Confidence: ${((result.confidence || 0) * 100).toFixed(0)}% | ${(result.processing_time_ms || 0).toFixed(0)}ms</div>
+        `;
+    } catch (e) {
+        document.getElementById(loadingId).innerHTML = `<span style="color:var(--danger);">Error: ${e.message}</span>`;
+    }
+}
+
+function addChatBubble(html, who) {
+    const el = document.createElement('div');
+    const id = 'msg-' + Date.now();
+    el.className = 'chat-bubble ' + who;
+    el.id = id;
+    el.innerHTML = html;
+    document.getElementById('chat-messages').appendChild(el);
+    el.scrollIntoView({ behavior: 'smooth' });
+    return id;
+}
+
+// ===========================================================================
+// Knowledge Graph
+// ===========================================================================
+let graphNetwork = null;
+async function loadGraph() {
+    try {
+        const data = await api('/api/graph');
+        const nodes = (data.nodes || []).map(n => ({
+            id: n.id, label: n.label || n.id,
+            color: {
+                background: 'rgba(124,108,240,0.2)',
+                border: '#7c6cf0',
+                highlight: { background: 'rgba(124,108,240,0.4)', border: '#a193f7' },
+                hover: { background: 'rgba(124,108,240,0.3)', border: '#a193f7' },
+            },
+            font: { color: '#e8eaf4', size: 14, face: 'Inter' },
+            borderWidth: 2,
+            shadow: { enabled: true, color: 'rgba(124,108,240,0.15)', size: 10 },
+        }));
+        const edges = (data.edges || []).map(e => ({
+            from: e.from, to: e.to, label: e.label || '',
+            color: { color: 'rgba(88,94,130,0.4)', highlight: '#7c6cf0', hover: '#a193f7' },
+            font: { color: '#585e82', size: 11, face: 'Inter' },
+            arrows: { to: { enabled: true, scaleFactor: 0.7 } },
+            smooth: { type: 'curvedCW', roundness: 0.15 },
+        }));
+
+        document.getElementById('graph-info').textContent = `${nodes.length} nodes, ${edges.length} edges`;
+
+        const container = document.getElementById('graph-container');
+        if (graphNetwork) graphNetwork.destroy();
+        graphNetwork = new vis.Network(container, { nodes, edges }, {
+            physics: { barnesHut: { gravitationalConstant: -3000, springLength: 150, springConstant: 0.04 } },
+            interaction: { hover: true, zoomView: true, tooltipDelay: 200 },
+            nodes: { shape: 'dot', size: 18 },
+        });
+    } catch (e) {
+        toast('Failed to load graph: ' + e.message, 'error');
+    }
+}
+
+// ===========================================================================
+// System Verify
+// ===========================================================================
+async function runChecks() {
+    const container = document.getElementById('check-results');
+    container.innerHTML = '';
+    const btn = document.getElementById('run-checks-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div> Running...';
+
+    const checks = [
+        { name: 'API Health',      icon: 'fa-heartbeat', fn: () => api('/api/health') },
+        { name: 'System Stats',    icon: 'fa-chart-bar', fn: () => api('/api/system/stats') },
+        { name: 'Text Ingestion',  icon: 'fa-pen',       fn: () => api('/api/memories/ingest/text', {
+            method: 'POST',
+            body: JSON.stringify({ text: '[VERIFY] Test memory at ' + new Date().toISOString(), source: 'verify' }),
+        })},
+        { name: 'Memory List',     icon: 'fa-list',      fn: () => api('/api/memories?limit=5') },
+        { name: 'Query Engine',    icon: 'fa-search',    fn: () => api('/api/query', {
+            method: 'POST',
+            body: JSON.stringify({ query: 'What do I remember?' }),
+        })},
+        { name: 'Knowledge Graph', icon: 'fa-diagram-project', fn: () => api('/api/graph') },
+        { name: 'WebSocket',       icon: 'fa-plug',      fn: () => new Promise((resolve, reject) => {
+            if (ws && ws.readyState === 1) { ws.send(JSON.stringify({type:'ping'})); resolve({status:'connected'}); }
+            else reject(new Error('WebSocket not connected'));
+        })},
+    ];
+
+    for (const check of checks) {
+        const el = document.createElement('div');
+        el.className = 'check-item';
+        el.innerHTML = `
+            <div class="check-icon pending"><i class="fas fa-hourglass-half"></i></div>
+            <div style="flex:1;">
+                <b>${check.name}</b>
+                <div style="font-size:12px;color:var(--text-muted);">Running...</div>
+            </div>`;
+        container.appendChild(el);
+
+        try {
+            const start = performance.now();
+            const result = await check.fn();
+            const ms = (performance.now() - start).toFixed(0);
+            el.innerHTML = `
+                <div class="check-icon pass"><i class="fas fa-check"></i></div>
+                <div style="flex:1;">
+                    <b>${check.name}</b>
+                    <div style="font-size:12px;color:var(--success);">Passed (${ms}ms)</div>
+                </div>
+                <span class="badge badge-success">OK</span>`;
+        } catch (e) {
+            el.innerHTML = `
+                <div class="check-icon fail"><i class="fas fa-times"></i></div>
+                <div style="flex:1;">
+                    <b>${check.name}</b>
+                    <div style="font-size:12px;color:var(--danger);">${e.message}</div>
+                </div>
+                <span class="badge badge-error">FAIL</span>`;
+        }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-play"></i> Run All Checks';
+}
+
+// ===========================================================================
+// LLM Providers
+// ===========================================================================
+async function loadLLMStatus() {
+    try {
+        const status = await api('/api/llm/status');
+        const activeEl = document.getElementById('llm-active-info');
+        if (activeEl) {
+            const p = status.active_provider;
+            activeEl.innerHTML = `
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;background:rgba(124,108,240,0.08);border:1px solid rgba(124,108,240,0.15);border-radius:var(--radius-sm);">
+                    <i class="fas ${p === 'ollama' ? 'fa-server' : 'fa-desktop'}" style="color:var(--accent-light);font-size:18px;"></i>
+                    <div>
+                        <div style="font-weight:600;font-size:14px;">
+                            ${p === 'ollama' ? 'Ollama' : 'LM Studio'} / ${p === 'ollama' ? (status.ollama?.model || 'phi3') : (status.lmstudio?.model || 'mistral')}
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Active Provider</div>
+                    </div>
+                </div>`;
+        }
+
+        // Highlight active button
+        const btnOllama = document.getElementById('btn-ollama');
+        const btnLms = document.getElementById('btn-lmstudio');
+        if (status.active_provider === 'ollama') {
+            btnOllama.className = 'btn btn-primary';
+            btnLms.className = 'btn btn-secondary';
+        } else {
+            btnOllama.className = 'btn btn-secondary';
+            btnLms.className = 'btn btn-primary';
+        }
+
+        // Ollama status card
+        const ollamaEl = document.getElementById('ollama-status');
+        if (ollamaEl) {
+            const o = status.ollama || {};
+            ollamaEl.innerHTML = `
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                    <span class="status-dot ${o.available ? 'online' : 'offline'}"></span>
+                    <b style="font-size:14px;">${o.available ? 'Online' : 'Offline'}</b>
+                </div>
+                <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Model: <b style="color:var(--text-secondary);">${o.model || '-'}</b></div>
+                <div style="font-size:13px;color:var(--text-muted);">URL: <span style="font-family:monospace;">localhost:11434</span></div>
+            `;
+        }
+
+        // LM Studio status card
+        const lmsEl = document.getElementById('lmstudio-status');
+        if (lmsEl) {
+            const l = status.lmstudio || {};
+            lmsEl.innerHTML = `
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                    <span class="status-dot ${l.available ? 'online' : 'offline'}"></span>
+                    <b style="font-size:14px;">${l.available ? 'Online' : 'Offline'}</b>
+                </div>
+                <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Model: <b style="color:var(--text-secondary);">${l.model || '-'}</b></div>
+                <div style="font-size:13px;color:var(--text-muted);">URL: <span style="font-family:monospace;">${l.url || 'localhost:1234'}</span></div>
+            `;
+        }
+    } catch (e) {
+        toast('Failed to load LLM status: ' + e.message, 'error');
+    }
+}
+
+async function switchLLM(provider) {
+    try {
+        toast('Switching to ' + provider + '...', 'info');
+        const result = await api('/api/llm/switch', {
+            method: 'POST',
+            body: JSON.stringify({ provider }),
+        });
+        toast('Switched to ' + (result.active_provider || provider), 'success');
+        loadLLMStatus();
+    } catch (e) {
+        toast('Switch failed: ' + e.message, 'error');
+    }
+}
+
+async function testLLM() {
+    const prompt = document.getElementById('llm-test-prompt')?.value?.trim();
+    if (!prompt) return toast('Enter a test prompt first', 'error');
+
+    const resultEl = document.getElementById('llm-test-result');
+    resultEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><div class="loader"></div> Generating response...</div>';
+
+    try {
+        const result = await api('/api/llm/test', {
+            method: 'POST',
+            body: JSON.stringify({ prompt }),
+        });
+        resultEl.innerHTML = `
+            <div style="margin-bottom:10px;font-weight:600;color:var(--text-primary);">Response</div>
+            <div style="background:var(--bg-input);padding:14px 18px;border-radius:var(--radius-sm);font-size:13px;white-space:pre-wrap;line-height:1.7;border:1px solid var(--border);">${escapeHtml(result.response || JSON.stringify(result))}</div>
+            <div style="margin-top:10px;font-size:12px;color:var(--text-muted);display:flex;gap:16px;">
+                <span><i class="fas fa-robot" style="margin-right:4px;"></i> ${result.provider || '-'}</span>
+                <span><i class="fas fa-microchip" style="margin-right:4px;"></i> ${result.model || '-'}</span>
+                <span><i class="fas fa-clock" style="margin-right:4px;"></i> ${result.latency_ms ?? '-'}ms</span>
+            </div>
+        `;
+    } catch (e) {
+        resultEl.innerHTML = `<span style="color:var(--danger);"><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>${e.message}</span>`;
+    }
+}
+
+// ===========================================================================
+// Save
+// ===========================================================================
+async function saveSystem() {
+    try {
+        await api('/api/system/save', { method: 'POST' });
+        toast('System state saved successfully', 'success');
+    } catch (e) {
+        toast('Save failed: ' + e.message, 'error');
+    }
+}
+
+// ===========================================================================
+// Boot
+// ===========================================================================
+connectWS();
+refreshStats();
+</script>
+</body>
+</html>

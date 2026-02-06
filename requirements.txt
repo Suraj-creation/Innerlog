@@ -1,0 +1,56 @@
+# EdgeMemory - Core Dependencies
+
+# Core ML
+torch>=2.0.0
+transformers>=4.35.0
+sentence-transformers>=2.2.0
+
+# ASR
+openai-whisper>=20230918
+
+# Vector Store
+faiss-cpu>=1.7.4
+
+# Database
+duckdb>=0.9.0
+
+# Sparse Retrieval
+rank-bm25>=0.2.2
+
+# Knowledge Graph
+networkx>=3.0
+
+# LLM Interface
+ollama>=0.1.0
+
+# Lightweight Classifiers
+setfit>=1.0.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# Entity Resolution
+rapidfuzz>=3.0.0
+
+# Compression/Summarization
+tiktoken>=0.5.0
+langchain-text-splitters>=0.0.1
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+websockets>=12.0
+jinja2>=3.1.0
+aiofiles>=23.0.0
+
+# Utilities
+pydantic>=2.0.0
+pyyaml>=6.0
+numpy>=1.24.0
+pandas>=2.0.0
+tqdm>=4.66.0
+
+# Testing
+pytest>=7.4.0
+pytest-benchmark>=4.0.0
+httpx>=0.25.0

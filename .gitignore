@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# History
+.history/
+
+# Data files (large/binary)
+data/faiss_index.index
+data/faiss_index.map
+data/memories.duckdb
+data/memories.duckdb.wal
+
+# Models
+models/*.pt
+models/*.bin
+
+# Distribution
+dist/
+build/
+*.egg-info/

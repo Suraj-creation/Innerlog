@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdgeMemory — Command Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d27;
+            --bg-card: #222533;
+            --bg-hover: #2a2d3e;
+            --border: #2e3348;
+            --text-primary: #e4e6f0;
+            --text-secondary: #8b8fa8;
+            --text-muted: #5c6082;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --radius: 12px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ---- Sidebar ---- */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .sidebar-brand {
+            padding: 24px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-brand h1 {
+            font-size: 20px; font-weight: 700; color: var(--accent);
+        }
+        .sidebar-brand p {
+            font-size: 11px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .nav-items { flex: 1; padding: 12px 8px; overflow-y: auto; }
+        .nav-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; border-radius: 8px; cursor: pointer;
+            color: var(--text-secondary); transition: all 0.15s; font-size: 14px; font-weight: 500;
+        }
+        .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent); color: #fff; }
+        .nav-item i { width: 20px; text-align: center; }
+
+        .sidebar-status {
+            padding: 16px 20px; border-top: 1px solid var(--border);
+            font-size: 12px; color: var(--text-muted);
+        }
+        .status-dot {
+            display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-dot.online { background: var(--success); }
+        .status-dot.offline { background: var(--danger); }
+
+        /* ---- Main ---- */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar {
+            height: 56px; background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px;
+        }
+        .topbar h2 { font-size: 16px; font-weight: 600; }
+
+        .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+        /* ---- Pages ---- */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* ---- Cards ---- */
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+        }
+        .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
+
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 20px;
+        }
+        .stat-card .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+        .stat-card .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* ---- Buttons ---- */
+        .btn {
+            padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500;
+            cursor: pointer; transition: all 0.15s; border: none; display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary { background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-sm { padding: 6px 14px; font-size: 13px; }
+
+        /* ---- Forms ---- */
+        textarea, input[type="text"], select {
+            width: 100%; background: var(--bg-primary); border: 1px solid var(--border);
+            border-radius: 8px; padding: 12px; color: var(--text-primary); font-family: 'Inter', sans-serif;
+            font-size: 14px; resize: vertical; outline: none; transition: border 0.15s;
+        }
+        textarea:focus, input[type="text"]:focus { border-color: var(--accent); }
+
+        /* ---- Memory List ---- */
+        .memory-item {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+            cursor: pointer; transition: border-color 0.15s;
+        }
+        .memory-item:hover { border-color: var(--accent); }
+        .memory-item .mem-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .memory-item .mem-type {
+            font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 3px 8px; border-radius: 4px;
+        }
+        .mem-type.episodic { background: #1e3a5f; color: #60a5fa; }
+        .mem-type.semantic { background: #1e3b2e; color: #4ade80; }
+        .mem-type.procedural { background: #3b2e1e; color: #fbbf24; }
+        .mem-type.emotional { background: #3b1e2e; color: #f472b6; }
+        .memory-item .mem-content { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+        .memory-item .mem-meta { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text-muted); }
+
+        /* ---- Chat ---- */
+        .chat-container { display: flex; flex-direction: column; height: calc(100vh - 140px); }
+        .chat-messages { flex: 1; overflow-y: auto; padding-right: 8px; }
+        .chat-bubble {
+            max-width: 80%; padding: 14px 18px; border-radius: 16px;
+            margin-bottom: 12px; font-size: 14px; line-height: 1.6;
+        }
+        .chat-bubble.user {
+            background: var(--accent); color: #fff; margin-left: auto; border-bottom-right-radius: 4px;
+        }
+        .chat-bubble.bot {
+            background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 4px;
+        }
+        .chat-bubble .meta { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+        .chat-input-area { display: flex; gap: 8px; margin-top: 12px; }
+        .chat-input-area input { flex: 1; }
+
+        /* ---- Graph ---- */
+        #graph-container { width: 100%; height: calc(100vh - 200px); border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
+
+        /* ---- Toast ---- */
+        .toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+        .toast {
+            background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+            padding: 14px 20px; border-radius: 8px; margin-bottom: 8px; min-width: 280px;
+            box-shadow: var(--shadow); animation: slideIn 0.3s;
+        }
+        .toast.success { border-left-color: var(--success); }
+        .toast.error { border-left-color: var(--danger); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* ---- Loader ---- */
+        .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top: 2px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---- Integration verify ---- */
+        .check-item {
+            display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+        }
+        .check-item .check-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .check-icon.pass { background: #052e16; color: var(--success); }
+        .check-icon.fail { background: #2e0516; color: var(--danger); }
+        .check-icon.pending { background: #1a1d27; color: var(--text-muted); }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-success { background: #052e16; color: var(--success); }
+        .badge-error { background: #2e0516; color: var(--danger); }
+    </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <h1><i class="fas fa-brain"></i> EdgeMemory</h1>
+        <p>Command Center</p>
+    </div>
+    <nav class="nav-items">
+        <div class="nav-item active" data-page="dashboard"><i class="fas fa-chart-line"></i> Dashboard</div>
+        <div class="nav-item" data-page="ingest"><i class="fas fa-plus-circle"></i> Ingest Memory</div>
+        <div class="nav-item" data-page="browser"><i class="fas fa-database"></i> Memory Browser</div>
+        <div class="nav-item" data-page="chat"><i class="fas fa-comments"></i> Query Chat</div>
+        <div class="nav-item" data-page="graph"><i class="fas fa-project-diagram"></i> Knowledge Graph</div>
+        <div class="nav-item" data-page="llm"><i class="fas fa-robot"></i> LLM Providers</div>
+        <div class="nav-item" data-page="verify"><i class="fas fa-check-double"></i> System Verify</div>
+    </nav>
+    <div class="sidebar-status">
+        <span class="status-dot" id="ws-status"></span>
+        <span id="ws-label">Connecting...</span>
+    </div>
+</aside>
+
+<!-- Main content -->
+<div class="main">
+    <header class="topbar">
+        <h2 id="page-title">Dashboard</h2>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-secondary btn-sm" onclick="saveSystem()"><i class="fas fa-save"></i> Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="refreshStats()"><i class="fas fa-sync-alt"></i></button>
+        </div>
+    </header>
+
+    <div class="content">
+        <!-- Dashboard -->
+        <div class="page active" id="page-dashboard">
+            <div class="card-grid" id="stat-cards"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-history"></i> Recent Memories</div>
+                    <div id="recent-memories"></div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-chart-pie"></i> Memory Types</div>
+                    <canvas id="type-chart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingest -->
+        <div class="page" id="page-ingest">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-keyboard"></i> Text Memory</div>
+                <textarea id="ingest-text" rows="6" placeholder="Enter a memory, thought, event, or observation..."></textarea>
+                <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+                    <select id="ingest-source" style="width:160px;">
+                        <option value="manual">Manual</option>
+                        <option value="conversation">Conversation</option>
+                        <option value="journal">Journal</option>
+                        <option value="note">Note</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="ingestText()"><i class="fas fa-paper-plane"></i> Ingest</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fas fa-microphone"></i> Voice Memory (Audio Upload)</div>
+                <input type="file" id="audio-file" accept="audio/*" style="margin-bottom:12px;">
+                <button class="btn btn-primary" onclick="ingestAudio()"><i class="fas fa-upload"></i> Upload & Transcribe</button>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fas fa-list"></i> Ingestion Log</div>
+                <div id="ingest-log" style="max-height:300px;overflow-y:auto;font-size:13px;color:var(--text-secondary);"></div>
+            </div>
+        </div>
+
+        <!-- Memory Browser -->
+        <div class="page" id="page-browser">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="font-size:16px;">All Memories</h3>
+                <button class="btn btn-secondary btn-sm" onclick="loadMemories()"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            <div id="memory-list"></div>
+        </div>
+
+        <!-- Query Chat -->
+        <div class="page" id="page-chat">
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Ask about your memories... (e.g., 'Why did I change my mind about X?')" onkeydown="if(event.key==='Enter')sendQuery()">
+                    <button class="btn btn-primary" onclick="sendQuery()"><i class="fas fa-arrow-right"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Knowledge Graph -->
+        <div class="page" id="page-graph">
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <button class="btn btn-secondary btn-sm" onclick="loadGraph()"><i class="fas fa-sync-alt"></i> Reload</button>
+                <span style="font-size:13px;color:var(--text-muted);padding-top:6px;" id="graph-info"></span>
+            </div>
+            <div id="graph-container"></div>
+        </div>
+
+        <!-- System Verify -->
+        <div class="page" id="page-verify">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-stethoscope"></i> Integration Health Checks</div>
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+                    Tests each subsystem end-to-end to verify correct operation.
+                </p>
+                <button class="btn btn-primary" onclick="runChecks()" id="run-checks-btn"><i class="fas fa-play"></i> Run All Checks</button>
+                <div id="check-results" style="margin-top:16px;"></div>
+            </div>
+        </div>
+
+        <!-- LLM Providers -->
+        <div class="page" id="page-llm">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-exchange-alt"></i> Active Provider</div>
+                <div id="llm-active-info" style="margin-bottom:16px;"></div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-primary" onclick="switchLLM('ollama')" id="btn-ollama"><i class="fas fa-server"></i> Use Ollama (phi3)</button>
+                    <button class="btn btn-secondary" onclick="switchLLM('lmstudio')" id="btn-lmstudio"><i class="fas fa-desktop"></i> Use LM Studio (mistral)</button>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-server"></i> Ollama</div>
+                    <div id="ollama-status"></div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-desktop"></i> LM Studio</div>
+                    <div id="lmstudio-status"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fas fa-vial"></i> Quick Test</div>
+                <div style="display:flex;gap:8px;align-items:end;">
+                    <div style="flex:1">
+                        <input type="text" id="llm-test-prompt" placeholder="Enter a test prompt..." value="What is the capital of France?">
+                    </div>
+                    <button class="btn btn-primary" onclick="testLLM()"><i class="fas fa-bolt"></i> Test</button>
+                </div>
+                <div id="llm-test-result" style="margin-top:12px;font-size:13px;color:var(--text-secondary);"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ===========================================================================
+// State
+// ===========================================================================
+const API = '';
+let ws = null;
+let typeChart = null;
+
+// ===========================================================================
+// Navigation
+// ===========================================================================
+document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        const pageId = 'page-' + el.dataset.page;
+        document.getElementById(pageId).classList.add('active');
+        document.getElementById('page-title').textContent = el.textContent.trim();
+
+        // Lazy load data for pages
+        if (el.dataset.page === 'browser') loadMemories();
+        if (el.dataset.page === 'graph') loadGraph();
+        if (el.dataset.page === 'dashboard') refreshStats();
+        if (el.dataset.page === 'llm') loadLLMStatus();
+    });
+});
+
+// ===========================================================================
+// WebSocket
+// ===========================================================================
+function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => {
+        document.getElementById('ws-status').className = 'status-dot online';
+        document.getElementById('ws-label').textContent = 'Connected';
+    };
+    ws.onclose = () => {
+        document.getElementById('ws-status').className = 'status-dot offline';
+        document.getElementById('ws-label').textContent = 'Disconnected';
+        setTimeout(connectWS, 3000);
+    };
+    ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'memory_ingested') {
+            toast('Memory ingested: ' + (msg.data.type || 'unknown'), 'success');
+        }
+    };
+}
+
+// ===========================================================================
+// API helpers
+// ===========================================================================
+async function api(path, opts = {}) {
+    const res = await fetch(API + path, {
+        headers: { 'Content-Type': 'application/json', ...opts.headers },
+        ...opts,
+    });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+    }
+    return res.json();
+}
+
+function toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+// ===========================================================================
+// Dashboard
+// ===========================================================================
+async function refreshStats() {
+    try {
+        const stats = await api('/api/system/stats');
+        const cards = document.getElementById('stat-cards');
+        const totalMem = stats.memories?.total_memories ?? 0;
+        cards.innerHTML = `
+            <div class="stat-card"><div class="label">Total Memories</div><div class="value">${totalMem}</div></div>
+            <div class="stat-card"><div class="label">Vector Index</div><div class="value">${stats.vector_count ?? 0}</div></div>
+            <div class="stat-card"><div class="label">Graph Nodes</div><div class="value">${stats.graph_nodes ?? 0}</div></div>
+            <div class="stat-card"><div class="label">Graph Edges</div><div class="value">${stats.graph_edges ?? 0}</div></div>
+            <div class="stat-card" style="border-left:3px solid ${stats.llm_provider === 'ollama' ? '#22c55e' : '#6366f1'}">
+                <div class="label">LLM Provider</div>
+                <div class="value" style="font-size:15px">${stats.llm_provider ?? '-'}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${stats.llm_model ?? ''}</div>
+            </div>
+            <div class="stat-card"><div class="label">Embeddings</div><div class="value" style="font-size:16px">${stats.embedding_model ?? '-'}</div></div>
+        `;
+
+        // Recent memories
+        try {
+            const mems = await api('/api/memories?limit=5');
+            const container = document.getElementById('recent-memories');
+            if (mems.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No memories yet. Go to Ingest to add some.</p>';
+            } else {
+                container.innerHTML = mems.map(m => `
+                    <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+                        <span class="mem-type ${m.type || 'episodic'}" style="margin-right:8px;">${m.type || '?'}</span>
+                        ${(m.content || '').substring(0, 80)}...
+                    </div>
+                `).join('');
+            }
+        } catch(e) {}
+
+        // Type chart
+        const typeCounts = stats.memories?.by_type || {};
+        updateTypeChart(typeCounts);
+    } catch (e) {
+        toast('Failed to load stats: ' + e.message, 'error');
+    }
+}
+
+function updateTypeChart(data) {
+    const labels = Object.keys(data);
+    const values = Object.values(data);
+    const colors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899'];
+
+    const ctx = document.getElementById('type-chart');
+    if (typeChart) typeChart.destroy();
+    if (labels.length === 0) return;
+
+    typeChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom', labels: { color: '#8b8fa8', font: { size: 12 } } },
+            },
+        },
+    });
+}
+
+// ===========================================================================
+// Ingestion
+// ===========================================================================
+async function ingestText() {
+    const text = document.getElementById('ingest-text').value.trim();
+    if (!text) return toast('Enter some text first', 'error');
+    const source = document.getElementById('ingest-source').value;
+
+    try {
+        const result = await api('/api/memories/ingest/text', {
+            method: 'POST',
+            body: JSON.stringify({ text, source }),
+        });
+        document.getElementById('ingest-text').value = '';
+        appendIngestLog(result);
+        toast('Memory ingested successfully!', 'success');
+    } catch (e) {
+        toast('Ingestion failed: ' + e.message, 'error');
+    }
+}
+
+async function ingestAudio() {
+    const fileInput = document.getElementById('audio-file');
+    if (!fileInput.files.length) return toast('Select an audio file first', 'error');
+
+    const form = new FormData();
+    form.append('file', fileInput.files[0]);
+
+    try {
+        const res = await fetch(API + '/api/memories/ingest/audio', { method: 'POST', body: form });
+        if (!res.ok) throw new Error(await res.text());
+        const result = await res.json();
+        appendIngestLog(result);
+        toast('Audio transcribed & ingested!', 'success');
+    } catch (e) {
+        toast('Audio ingestion failed: ' + e.message, 'error');
+    }
+}
+
+function appendIngestLog(result) {
+    const log = document.getElementById('ingest-log');
+    const ts = new Date().toLocaleTimeString();
+    log.innerHTML = `<div style="padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--success);">[${ts}]</span>
+        <span class="mem-type ${result.type || ''}">${result.type || '?'}</span>
+        ${result.content?.substring(0, 100) || result.event_id}
+        <span style="color:var(--text-muted);"> (importance: ${(result.importance || 0).toFixed(2)})</span>
+    </div>` + log.innerHTML;
+}
+
+// ===========================================================================
+// Memory Browser
+// ===========================================================================
+async function loadMemories() {
+    try {
+        const mems = await api('/api/memories?limit=100');
+        const container = document.getElementById('memory-list');
+        if (mems.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-muted);">No memories stored yet.</p>';
+            return;
+        }
+        container.innerHTML = mems.map(m => `
+            <div class="memory-item">
+                <div class="mem-header">
+                    <span class="mem-type ${m.type || 'episodic'}">${m.type || 'unknown'}</span>
+                    <span style="font-size:12px;color:var(--text-muted);">${m.event_id?.substring(0, 8) || ''}</span>
+                </div>
+                <div class="mem-content">${escapeHtml(m.content || '')}</div>
+                <div class="mem-meta">
+                    <span><i class="fas fa-clock"></i> ${m.timestamp || '-'}</span>
+                    <span><i class="fas fa-star"></i> ${(m.importance || 0).toFixed(2)}</span>
+                    ${m.topic ? '<span><i class="fas fa-tag"></i> ' + m.topic + '</span>' : ''}
+                    ${m.emotion ? '<span><i class="fas fa-heart"></i> ' + m.emotion + '</span>' : ''}
+                    ${(m.entities || []).length ? '<span><i class="fas fa-users"></i> ' + m.entities.join(', ') + '</span>' : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        toast('Failed to load memories: ' + e.message, 'error');
+    }
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// ===========================================================================
+// Query Chat
+// ===========================================================================
+async function sendQuery() {
+    const input = document.getElementById('chat-input');
+    const query = input.value.trim();
+    if (!query) return;
+
+    addChatBubble(query, 'user');
+    input.value = '';
+    const loadingId = addChatBubble('<div class="loader"></div> Thinking...', 'bot');
+
+    try {
+        const result = await api('/api/query', {
+            method: 'POST',
+            body: JSON.stringify({ query }),
+        });
+
+        const evidenceHtml = (result.evidence || []).length
+            ? '<div style="margin-top:8px;font-size:12px;color:var(--text-muted);"><b>Evidence:</b><ul>' +
+              result.evidence.map(e => `<li>${escapeHtml(e.content?.substring(0, 80) || e.event_id)}</li>`).join('') +
+              '</ul></div>'
+            : '';
+
+        document.getElementById(loadingId).innerHTML = `
+            ${escapeHtml(result.answer || 'No answer generated.')}
+            ${evidenceHtml}
+            <div class="meta">Agent: ${result.agent_used || '-'} | Confidence: ${((result.confidence || 0) * 100).toFixed(0)}% | ${(result.processing_time_ms || 0).toFixed(0)}ms</div>
+        `;
+    } catch (e) {
+        document.getElementById(loadingId).innerHTML = `<span style="color:var(--danger);">Error: ${e.message}</span>`;
+    }
+}
+
+function addChatBubble(html, who) {
+    const el = document.createElement('div');
+    const id = 'msg-' + Date.now();
+    el.className = 'chat-bubble ' + who;
+    el.id = id;
+    el.innerHTML = html;
+    document.getElementById('chat-messages').appendChild(el);
+    el.scrollIntoView({ behavior: 'smooth' });
+    return id;
+}
+
+// ===========================================================================
+// Knowledge Graph
+// ===========================================================================
+let graphNetwork = null;
+async function loadGraph() {
+    try {
+        const data = await api('/api/graph');
+        const nodes = (data.nodes || []).map(n => ({
+            id: n.id, label: n.label || n.id,
+            color: { background: '#6366f1', border: '#818cf8' },
+            font: { color: '#e4e6f0', size: 14 },
+        }));
+        const edges = (data.edges || []).map(e => ({
+            from: e.from, to: e.to, label: e.label || '',
+            color: { color: '#4b5563' }, font: { color: '#8b8fa8', size: 11 },
+            arrows: 'to',
+        }));
+
+        document.getElementById('graph-info').textContent = `${nodes.length} nodes, ${edges.length} edges`;
+
+        const container = document.getElementById('graph-container');
+        if (graphNetwork) graphNetwork.destroy();
+        graphNetwork = new vis.Network(container, { nodes, edges }, {
+            physics: { barnesHut: { gravitationalConstant: -3000, springLength: 150 } },
+            interaction: { hover: true, zoomView: true },
+        });
+    } catch (e) {
+        toast('Failed to load graph: ' + e.message, 'error');
+    }
+}
+
+// ===========================================================================
+// System Verify
+// ===========================================================================
+async function runChecks() {
+    const container = document.getElementById('check-results');
+    container.innerHTML = '';
+    const btn = document.getElementById('run-checks-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div> Running...';
+
+    const checks = [
+        { name: 'API Health', fn: () => api('/api/health') },
+        { name: 'System Stats', fn: () => api('/api/system/stats') },
+        { name: 'Text Ingestion', fn: () => api('/api/memories/ingest/text', {
+            method: 'POST',
+            body: JSON.stringify({ text: '[VERIFY] Test memory at ' + new Date().toISOString(), source: 'verify' }),
+        })},
+        { name: 'Memory List', fn: () => api('/api/memories?limit=5') },
+        { name: 'Query Engine', fn: () => api('/api/query', {
+            method: 'POST',
+            body: JSON.stringify({ query: 'What do I remember?' }),
+        })},
+        { name: 'Knowledge Graph', fn: () => api('/api/graph') },
+        { name: 'WebSocket', fn: () => new Promise((resolve, reject) => {
+            if (ws && ws.readyState === 1) { ws.send(JSON.stringify({type:'ping'})); resolve({status:'connected'}); }
+            else reject(new Error('WebSocket not connected'));
+        })},
+    ];
+
+    for (const check of checks) {
+        const el = document.createElement('div');
+        el.className = 'check-item';
+        el.innerHTML = `<div class="check-icon pending"><i class="fas fa-hourglass-half"></i></div>
+            <div><b>${check.name}</b><div style="font-size:12px;color:var(--text-muted);">Running...</div></div>`;
+        container.appendChild(el);
+
+        try {
+            const start = performance.now();
+            const result = await check.fn();
+            const ms = (performance.now() - start).toFixed(0);
+            el.innerHTML = `<div class="check-icon pass"><i class="fas fa-check"></i></div>
+                <div style="flex:1;"><b>${check.name}</b><div style="font-size:12px;color:var(--success);">Passed (${ms}ms)</div></div>
+                <span class="badge badge-success">OK</span>`;
+        } catch (e) {
+            el.innerHTML = `<div class="check-icon fail"><i class="fas fa-times"></i></div>
+                <div style="flex:1;"><b>${check.name}</b><div style="font-size:12px;color:var(--danger);">${e.message}</div></div>
+                <span class="badge badge-error">FAIL</span>`;
+        }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-play"></i> Run All Checks';
+}
+
+// ===========================================================================
+// LLM Providers
+// ===========================================================================
+async function loadLLMStatus() {
+    try {
+        const status = await api('/api/llm/status');
+        // Update active provider display
+        const activeEl = document.getElementById('active-provider');
+        if (activeEl) {
+            activeEl.textContent = status.active_provider === 'ollama'
+                ? `Ollama / ${status.ollama?.model || 'phi3'}`
+                : `LM Studio / ${status.lmstudio?.model || 'mistral'}`;
+        }
+
+        // Highlight active button
+        document.querySelectorAll('.provider-btn').forEach(btn => {
+            btn.style.opacity = btn.dataset.provider === status.active_provider ? '1' : '0.5';
+            btn.style.border = btn.dataset.provider === status.active_provider
+                ? '2px solid var(--accent)' : '2px solid transparent';
+        });
+
+        // Ollama status card
+        const ollamaEl = document.getElementById('ollama-status');
+        if (ollamaEl) {
+            const o = status.ollama || {};
+            ollamaEl.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <span class="status-dot ${o.available ? 'online' : 'offline'}"></span>
+                    <b>${o.available ? 'Online' : 'Offline'}</b>
+                </div>
+                <div style="font-size:13px;color:var(--text-muted);">Model: <b>${o.model || '-'}</b></div>
+                <div style="font-size:13px;color:var(--text-muted);">URL: http://localhost:11434</div>
+            `;
+        }
+
+        // LM Studio status card
+        const lmsEl = document.getElementById('lmstudio-status');
+        if (lmsEl) {
+            const l = status.lmstudio || {};
+            lmsEl.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <span class="status-dot ${l.available ? 'online' : 'offline'}"></span>
+                    <b>${l.available ? 'Online' : 'Offline'}</b>
+                </div>
+                <div style="font-size:13px;color:var(--text-muted);">Model: <b>${l.model || '-'}</b></div>
+                <div style="font-size:13px;color:var(--text-muted);">URL: ${l.url || 'http://localhost:1234'}</div>
+            `;
+        }
+    } catch (e) {
+        toast('Failed to load LLM status: ' + e.message, 'error');
+    }
+}
+
+async function switchLLM(provider) {
+    try {
+        toast('Switching to ' + provider + '...', 'info');
+        const result = await api('/api/llm/switch', {
+            method: 'POST',
+            body: JSON.stringify({ provider }),
+        });
+        toast('Switched to ' + (result.active_provider || provider), 'success');
+        loadLLMStatus();
+    } catch (e) {
+        toast('Switch failed: ' + e.message, 'error');
+    }
+}
+
+async function testLLM() {
+    const prompt = document.getElementById('llm-test-prompt')?.value?.trim();
+    if (!prompt) return toast('Enter a test prompt first', 'error');
+
+    const resultEl = document.getElementById('llm-test-result');
+    resultEl.innerHTML = '<div class="loader"></div> Generating response...';
+
+    try {
+        const result = await api('/api/query', {
+            method: 'POST',
+            body: JSON.stringify({ query: prompt }),
+        });
+        resultEl.innerHTML = `
+            <div style="margin-bottom:8px;"><b>Answer:</b></div>
+            <div style="background:var(--bg-secondary);padding:12px;border-radius:8px;font-size:13px;white-space:pre-wrap;">${result.answer || result.response || JSON.stringify(result)}</div>
+            <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">
+                Agent: ${result.agent || '-'} | Confidence: ${result.confidence ?? '-'} | Sources: ${result.source_count ?? '-'}
+            </div>
+        `;
+    } catch (e) {
+        resultEl.innerHTML = `<span style="color:var(--danger);">${e.message}</span>`;
+    }
+}
+
+// ===========================================================================
+// Save
+// ===========================================================================
+async function saveSystem() {
+    try {
+        await api('/api/system/save', { method: 'POST' });
+        toast('System state saved successfully', 'success');
+    } catch (e) {
+        toast('Save failed: ' + e.message, 'error');
+    }
+}
+
+// ===========================================================================
+// Boot
+// ===========================================================================
+connectWS();
+refreshStats();
+</script>
+</body>
+</html>

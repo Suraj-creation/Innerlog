@@ -1,0 +1,71 @@
+# EdgeMemory Configuration
+
+# LLM Settings
+llm:
+  provider: "ollama"                     # Primary provider: "ollama" or "lmstudio"
+  model: "phi3"                          # Ollama model name
+  temperature: 0.7
+  max_tokens: 1024
+  lmstudio:
+    model: "mistral-7b-instruct-v0.1"    # LM Studio model name
+    base_url: "http://localhost:1234"     # LM Studio API URL
+
+# ASR Settings
+asr:
+  model_size: "base"
+  device: "cpu"
+  compute_type: "int8"
+
+# Embedding Settings
+embeddings:
+  provider: "ollama"          # ollama or sentence-transformers
+  model: "nomic-embed-text"   # Ollama model name
+  dimension: 768              # nomic-embed-text dimension
+
+# Storage Paths
+storage:
+  base_path: "data"
+  db_path: "data/memories.db"
+  vector_path: "data/vectors/index"
+  graph_path: "data/knowledge.pkl"
+  audio_path: "data/audio"
+  summaries_path: "data/summaries"
+  entity_state_path: "data/entity_state.json"
+
+# Retrieval Settings
+retrieval:
+  dense_k: 20
+  sparse_k: 20
+  graph_k: 10
+  sql_k: 20
+  fusion_weights:
+    dense: 0.4
+    sparse: 0.2
+    graph: 0.2
+    sql: 0.2
+  rrf_k: 60
+
+# Agent Settings
+agents:
+  enabled:
+    - timeline
+    - causal
+    - arbitration
+  fallback_agent: "timeline"
+
+# Classifier Settings
+classifiers:
+  confidence_threshold: 0.7
+  use_lightweight: true
+
+# Server Settings
+server:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+
+# Background Processing
+background:
+  reflection_interval_hours: 24
+  pattern_window_days: 7
+  consolidation_enabled: true
