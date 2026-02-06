@@ -182,6 +182,40 @@ async def ingest_audio(file: UploadFile = File(...)):
             os.remove(tmp_path)
 
 
+@app.post("/api/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """Transcribe audio without ingesting — returns text + language."""
+    if not pipeline:
+        raise HTTPException(503, "Pipeline not initialized")
+    if not pipeline.asr or not pipeline.asr.is_available:
+        raise HTTPException(503, "ASR (Whisper) not available")
+    tmp_path = f"data/tmp_transcribe_{file.filename}"
+    os.makedirs("data", exist_ok=True)
+    try:
+        with open(tmp_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        result = pipeline.asr.transcribe(tmp_path)
+        if result.get("error"):
+            raise HTTPException(500, f"Whisper error: {result['error']}")
+        text = result.get("text", "").strip()
+        if not text:
+            raise HTTPException(422, "Whisper returned empty transcription — audio may be silent or unrecognizable.")
+        return {
+            "text": text,
+            "language": result.get("language", ""),
+            "segments": result.get("segments", []),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
 # ---------------------------------------------------------------------------
 # Memory Browser
 # ---------------------------------------------------------------------------
